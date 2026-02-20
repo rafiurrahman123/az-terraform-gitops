@@ -58,7 +58,7 @@ resource "azurerm_kubernetes_flux_configuration" "flux_config" {
   scope      = "cluster"
 
   git_repository {
-    url             = "https://github.com/YOUR_GITHUB_USERNAME/kube-gitops-terraform-github"
+    url             = "https://github.com/rafiurrahman123/kube-gitops-terraform-github"
     reference_type  = "branch"
     reference_value = "main"
   }
