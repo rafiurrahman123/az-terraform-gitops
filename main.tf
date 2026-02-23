@@ -47,14 +47,16 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
 
 resource "helm_release" "argocd" {
   name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm"
+  repository       = "https://argoproj.github.io/argo-helm" # Terraform uses this to bypass local repo lists
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
-  version          = "7.7.0" # Current stable version
+  version          = "7.7.0"
 
-  set {
-    name  = "server.service.type"
-    value = "LoadBalancer" # This gives you a Public IP for the GUI
-  }
+  set = [
+    {
+      name  = "server.service.type"
+      value = "LoadBalancer"
+    }
+  ]
 }

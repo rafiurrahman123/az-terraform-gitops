@@ -6,13 +6,18 @@ terraform {
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 3.0" # Version 3.0+ requires the = sign
+      version = "~> 3.0"
     }
   }
 }
 
+# 1. ADD THIS BLOCK (Azure requires it)
+provider "azurerm" {
+  features {}
+}
+
+# 2. UPDATE THIS BLOCK (Note the = sign)
 provider "helm" {
-  # Add the equals sign here!
   kubernetes = {
     host                   = azurerm_kubernetes_cluster.aks.kube_config[0].host
     client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config[0].client_certificate)
