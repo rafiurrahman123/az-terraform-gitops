@@ -4,16 +4,16 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0" # Version 3.0+ requires the = sign
+    }
   }
 }
 
-provider "azurerm" {
-  features {}
-  subscription_id = "ade02fe8-df1d-4886-8d78-d725dac92cb7"
-}
-
 provider "helm" {
-  kubernetes {
+  # Add the equals sign here!
+  kubernetes = {
     host                   = azurerm_kubernetes_cluster.aks.kube_config[0].host
     client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config[0].client_certificate)
     client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config[0].client_key)
