@@ -15,7 +15,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   default_node_pool {
     name       = "systempool"
     node_count = 1
-    vm_size    = "Standard_B2s" # Smallest viable for system services
+    vm_size    = "Standard_D2s_v3" # Smallest viable for system services
     # No Spot arguments allowed here
   }
 
@@ -28,7 +28,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   name                  = "spotpool"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-  vm_size               = "Standard_B2s"
+  vm_size               = "Standard_D2s_v3"
   node_count            = 1
   
   # Spot configuration is allowed here
@@ -50,7 +50,7 @@ resource "azurerm_kubernetes_cluster_extension" "flux" {
   cluster_id     = azurerm_kubernetes_cluster.aks.id
   extension_type = "microsoft.flux"
 }
-
+/*
 resource "azurerm_kubernetes_flux_configuration" "flux_config" {
   name       = "aks-gitops"
   cluster_id = azurerm_kubernetes_cluster.aks.id
@@ -69,4 +69,4 @@ resource "azurerm_kubernetes_flux_configuration" "flux_config" {
   }
 
   depends_on = [azurerm_kubernetes_cluster_extension.flux]
-}
+}*/
