@@ -45,28 +45,16 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   ]
 }
 
-resource "azurerm_kubernetes_cluster_extension" "flux" {
-  name           = "flux"
-  cluster_id     = azurerm_kubernetes_cluster.aks.id
-  extension_type = "microsoft.flux"
+resource "helm_release" "argocd" {
+  name             = "argocd"
+  repository       = "https://argoproj.github.io/argo-helm"
+  chart            = "argo-cd"
+  namespace        = "argocd"
+  create_namespace = true
+  version          = "7.7.0" # Current stable version
+
+  set {
+    name  = "server.service.type"
+    value = "LoadBalancer" # This gives you a Public IP for the GUI
+  }
 }
-/*
-resource "azurerm_kubernetes_flux_configuration" "flux_config" {
-  name       = "aks-gitops"
-  cluster_id = azurerm_kubernetes_cluster.aks.id
-  namespace  = "flux-system"
-  scope      = "cluster"
-
-  git_repository {
-    url             = "https://github.com/rafiurrahman123/kube-gitops-terraform-github"
-    reference_type  = "branch"
-    reference_value = "main"
-  }
-
-  kustomizations {
-    name = "infra"
-    path = "./cluster-config" # Path where you will store your YAMLs
-  }
-
-  depends_on = [azurerm_kubernetes_cluster_extension.flux]
-}*/
