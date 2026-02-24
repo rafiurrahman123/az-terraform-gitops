@@ -4,29 +4,45 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.0"
+    }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 3.0"
+      version = "~> 2.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.0"
     }
   }
 }
 
-# 1. ADD THIS BLOCK (Azure requires it)
 provider "azurerm" {
   features {}
 }
 
-# 2. UPDATE THIS BLOCK (Note the = sign)
-provider "helm" {
-  kubernetes = {
-    host                   = azurerm_kubernetes_cluster.aks.kube_config[0].host
-    client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config[0].client_certificate)
-    client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config[0].client_key)
-    cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config[0].cluster_ca_certificate)
-  }
+provider "azuread" {}
 
-  # THIS IS THE MAGIC FIX FOR THE DATADOG ERROR:
-  # It tells Terraform: "Don't use my Windows Helm folders. Use these instead."
-  repository_config_path = "${path.module}/.helm/repository/config.yaml"
-  repository_cache       = "${path.module}/.helm/repository/cache"
+# HELM Provider - This version is the most stable for AKS Entra ID
+provider "helm" {
+  kubernetes {
+    host                   = azurerm_kubernetes_cluster.aks.kube_config.0.host
+    cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
+
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "kubelogin"
+      args = [
+        "get-token",
+        "--environment",
+        "AzurePublicCloud",
+        "--server-id",
+        "6dae42b8-b81d-4ad5-b9f9-91570d226456",
+        "--login",
+        "azurecli"
+      ]
+    }
+  }
 }

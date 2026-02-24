@@ -6,7 +6,7 @@ resource "azurerm_resource_group" "rg" {
   location = "East US"
 }
 
-# 2. CREATE A STATIC IP (This keeps your URL the same even if you delete the cluster)
+# 2. STATIC IP
 resource "azurerm_public_ip" "argocd_ip" {
   name                = "argocd-static-ip"
   location            = azurerm_resource_group.rg.location
@@ -15,7 +15,7 @@ resource "azurerm_public_ip" "argocd_ip" {
   sku                 = "Standard"
 }
 
-# 3. AKS CLUSTER CONFIGURATION
+# 3. AKS CLUSTER
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "aks-gitops-cluster"
   location            = azurerm_resource_group.rg.location
@@ -48,34 +48,41 @@ resource "azurerm_role_assignment" "aks_admin" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# 5. ARGOCD HELM INSTALLATION
+# 5. ARGOCD HELM INSTALLATION (Direct URL Method)
 resource "helm_release" "argocd" {
   name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm"
-  chart            = "argo-cd"
+  
+  # By pointing to the .tgz directly, we bypass the entire repository index system
+  chart            = "https://github.com/argoproj/argo-helm/releases/download/argo-cd-7.7.0/argo-cd-7.7.0.tgz"
+  
   namespace        = "argocd"
   create_namespace = true
 
-  # Set the LoadBalancer to use our Static IP
-  set {
-    name  = "server.service.loadBalancerIP"
-    value = azurerm_public_ip.argocd_ip.ip_address
-  }
+  # We set these to null to make sure the provider doesn't try to look at your local repos
+  repository          = null
+  repository_key_file = null
 
-  set {
-    name  = "server.service.type"
-    value = "LoadBalancer"
-  }
+  values = [
+    <<-EOT
+    server:
+      service:
+        type: LoadBalancer
+        loadBalancerIP: ${azurerm_public_ip.argocd_ip.ip_address}
+    EOT
+  ]
 }
-
-# 6. ENTRA ID APP REGISTRATION (For SSO Login)
+# 6. ENTRA ID APP REGISTRATION
 resource "azuread_application" "argocd_sso" {
   display_name     = "argocd-sso"
   owners           = [data.azurerm_client_config.current.object_id]
   sign_in_audience = "AzureADMyOrg"
 
   web {
-    # This automatically updates the Redirect URI to our Static IP
     redirect_uris = ["https://${azurerm_public_ip.argocd_ip.ip_address}/api/dex/callback"]
   }
+}
+
+# 7. OUTPUTS
+output "argocd_url" {
+  value = "https://${azurerm_public_ip.argocd_ip.ip_address}"
 }
