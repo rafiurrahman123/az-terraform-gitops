@@ -1,22 +1,35 @@
-# main.tf
+# 1. Get current Azure client info (needed to find your ID)
+data "azurerm_client_config" "current" {}
 
 resource "azurerm_resource_group" "rg" {
   name     = "rg-budget-k8s"
   location = "East US"
 }
-# 1. The AKS Cluster with a small "Regular" System Pool
+
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "aks-gitops-cluster"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   dns_prefix          = "gitops-k8s"
-  sku_tier            = "Free"
+
+  # --- NEW SECURITY CONFIGURATION ---
+  
+  # Disables the "backdoor" local admin password
+  local_account_disabled = true
+
+  # Links the cluster to Entra ID and uses Azure to manage permissions
+  azure_active_directory_role_based_access_control {
+    managed                = true
+    azure_rbac_enabled      = true
+    tenant_id              = data.azurerm_client_config.current.tenant_id
+  }
+  
+  # ----------------------------------
 
   default_node_pool {
     name       = "systempool"
     node_count = 1
-    vm_size    = "Standard_D2s_v3" # Smallest viable for system services
-    # No Spot arguments allowed here
+    vm_size    = "Standard_D2s_v3"
   }
 
   identity {
@@ -24,40 +37,24 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
-# 2. The Separate "Spot" Node Pool for your workloads
-resource "azurerm_kubernetes_cluster_node_pool" "spot" {
-  name                  = "spotpool"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-  vm_size               = "Standard_D2s_v3"
-  node_count            = 1
-  
-  # Spot configuration is allowed here
-  priority        = "Spot"
-  eviction_policy = "Delete"
-  spot_max_price  = -1 # Pay up to the regular price
-
-  node_labels = {
-    "kubernetes.azure.com/scalesetpriority" = "spot"
-  }
-  
-  node_taints = [
-    "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
-  ]
+# 2. ADD THIS: Automatically gives YOU (the person running Terraform) 
+# permissions to manage the cluster. Without this, you'd be locked out!
+resource "azurerm_role_assignment" "aks_admin" {
+  scope                = azurerm_kubernetes_cluster.aks.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
+# Keep your existing Helm release for ArgoCD here...
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
-  version          = "7.7.0" # This is the Chart version for Argo CD 2.13.x (latest stable)
 
-  # We use the official URL so GitHub can reach it
-  set = [
-    {
-      name  = "server.service.type"
-      value = "LoadBalancer"
-    }
-  ]
+  set {
+    name  = "server.service.type"
+    value = "LoadBalancer"
+  }
 }
