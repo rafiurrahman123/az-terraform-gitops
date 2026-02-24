@@ -1,4 +1,4 @@
-# 1. Get current Azure client info (needed to find your ID)
+# 1. Get current Azure client info
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_resource_group" "rg" {
@@ -6,25 +6,29 @@ resource "azurerm_resource_group" "rg" {
   location = "East US"
 }
 
+# 2. CREATE A STATIC IP (This keeps your URL the same even if you delete the cluster)
+resource "azurerm_public_ip" "argocd_ip" {
+  name                = "argocd-static-ip"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+# 3. AKS CLUSTER CONFIGURATION
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "aks-gitops-cluster"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   dns_prefix          = "gitops-k8s"
 
-  # --- NEW SECURITY CONFIGURATION ---
-  
-  # Disables the "backdoor" local admin password
   local_account_disabled = true
 
-  # Links the cluster to Entra ID and uses Azure to manage permissions
   azure_active_directory_role_based_access_control {
-    managed                = true
-    azure_rbac_enabled      = true
-    tenant_id              = data.azurerm_client_config.current.tenant_id
+    managed            = true
+    azure_rbac_enabled = true
+    tenant_id          = data.azurerm_client_config.current.tenant_id
   }
-  
-  # ----------------------------------
 
   default_node_pool {
     name       = "systempool"
@@ -37,15 +41,14 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
-# 2. ADD THIS: Automatically gives YOU (the person running Terraform) 
-# permissions to manage the cluster. Without this, you'd be locked out!
+# 4. RBAC ROLE ASSIGNMENT
 resource "azurerm_role_assignment" "aks_admin" {
   scope                = azurerm_kubernetes_cluster.aks.id
   role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# Keep your existing Helm release for ArgoCD here...
+# 5. ARGOCD HELM INSTALLATION
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -53,8 +56,26 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
 
+  # Set the LoadBalancer to use our Static IP
+  set {
+    name  = "server.service.loadBalancerIP"
+    value = azurerm_public_ip.argocd_ip.ip_address
+  }
+
   set {
     name  = "server.service.type"
     value = "LoadBalancer"
+  }
+}
+
+# 6. ENTRA ID APP REGISTRATION (For SSO Login)
+resource "azuread_application" "argocd_sso" {
+  display_name     = "argocd-sso"
+  owners           = [data.azurerm_client_config.current.object_id]
+  sign_in_audience = "AzureADMyOrg"
+
+  web {
+    # This automatically updates the Redirect URI to our Static IP
+    redirect_uris = ["https://${azurerm_public_ip.argocd_ip.ip_address}/api/dex/callback"]
   }
 }
