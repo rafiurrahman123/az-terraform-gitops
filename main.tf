@@ -47,12 +47,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
 
 resource "helm_release" "argocd" {
   name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm" # Terraform uses this to bypass local repo lists
+  repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
-  version          = "7.7.0"
+  version          = "7.7.0" # This is the Chart version for Argo CD 2.13.x (latest stable)
 
+  # We use the official URL so GitHub can reach it
   set = [
     {
       name  = "server.service.type"
